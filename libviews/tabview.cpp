@@ -276,7 +276,24 @@ void TabWidget::moveEvent(QMoveEvent* e)
     checkVisibility();
 }
 
+//
+// Helper-class ClickableLabel
+//
 
+ClickableLabel::ClickableLabel(const QString& text, QWidget* parent)
+    : QLabel(parent)
+{
+    setText(text);
+}
+
+ClickableLabel::~ClickableLabel()
+{
+}
+
+void ClickableLabel::mousePressEvent(QMouseEvent*)
+{
+    emit clicked();
+}
 
 //
 // TabView
@@ -311,7 +328,8 @@ TabView::TabView(TraceItemView* parentView, QWidget* parent)
     vbox->setSpacing( 6 );
     vbox->setMargin( 6 );
 
-    _nameLabel = new QLabel(this); //KSqueezedTextLabel( this);
+    _nameLabel = new ClickableLabel("", this); //KSqueezedTextLabel( this);
+    connect(_nameLabel, &ClickableLabel::clicked, this, &TabView::labelClicked);
     _nameLabel->setSizePolicy(QSizePolicy( QSizePolicy::Ignored,
                                            QSizePolicy::Fixed ));
     _nameLabel->setObjectName( QStringLiteral("nameLabel") );
@@ -406,6 +424,17 @@ TabView::TabView(TraceItemView* parentView, QWidget* parent)
     updateVisibility();
 
     this->setWhatsThis( whatsThis() );
+}
+
+void TabView::labelClicked()
+{
+	if (ProfileContext::typeName(_activeItem->type()) == "Function") {
+		TraceFunction* f = (TraceFunction*)_activeItem;
+		while (f->aggregator()) {
+			f = f->aggregator();
+		}
+		activated(f);
+	}
 }
 
 void TabView::updateNameLabel(const QString& n)
@@ -729,7 +758,20 @@ void TabView::doUpdate(int changeType, bool force)
     {
         if (_data && _activeItem) {
             _nameLabelTooltip = _activeItem->formattedName();
-            updateNameLabel(_activeItem->prettyName());
+            QString imgText, imgTooltip;
+            if (ProfileContext::typeName(_activeItem->type()) == "Function") {
+                if (GlobalConfig::separateCallers() && GlobalConfig::isCallChain(_activeItem->name())) {
+                    imgText = " <img src=\":/child.png\">";
+                    QString name_with_ln = _activeItem->name();
+                    name_with_ln = name_with_ln.right(name_with_ln.length() - name_with_ln.indexOf('\'') - 1);
+                    name_with_ln.replace("'","\n::");
+                    imgTooltip = "This function is displayed within a specific context:\n::" +
+                                 name_with_ln + "\nClick on this label for the contextless version of this function.";
+                }
+                updateNameLabel(((TraceFunction*)_activeItem)->prettyNameTopLevel() + imgText);
+            } else
+                updateNameLabel(_activeItem->prettyName() + imgText);
+            _nameLabel->setToolTip(imgTooltip);
         }
         else {
             _nameLabelTooltip = QString();

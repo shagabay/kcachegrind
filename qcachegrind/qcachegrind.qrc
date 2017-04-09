@@ -4,5 +4,6 @@
   <file alias="move.png">../pics/hicolor/22-actions-move.png</file>
   <file alias="hidetemplates.png">../pics/hicolor/22-actions-hidetemplates.png</file>
   <file alias="app.png">../kcachegrind/48-apps-kcachegrind.png</file>
+  <file alias="child.png">../libviews/child.png</file>
 </qresource>
 </RCC>

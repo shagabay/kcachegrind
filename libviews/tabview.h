@@ -24,6 +24,7 @@
 #ifndef TABVIEW_H
 #define TABVIEW_H
 
+#include <QLabel>
 #include <QWidget>
 #include <QTabWidget>
 #include <QTabBar>
@@ -40,6 +41,21 @@
 
 class QLabel;
 class TabView;
+
+/**
+ * Helper class for catching clicks on labels
+ */
+class ClickableLabel : public QLabel
+{
+Q_OBJECT
+public:
+    explicit ClickableLabel( const QString& text="", QWidget* parent=0 );
+    ~ClickableLabel();
+signals:
+    void clicked();
+protected:
+    void mousePressEvent(QMouseEvent* event);
+};
 
 /**
  * Subclass of QTabBar to enable context menu on tabs
@@ -147,6 +163,7 @@ public:
 public slots:
     void tabChanged(int);
     void visibleRectChangedSlot(TabWidget*);
+    void labelClicked();
 
 signals:
     void tabActivated(TabView*);
@@ -170,7 +187,7 @@ private:
     // this is true if width or height <= 1, and no child updates are done
     bool _isCollapsed;
 
-    QLabel* _nameLabel;
+    ClickableLabel* _nameLabel;
     QString _nameLabelText, _nameLabelTooltip;
     int _textWidth;
 
