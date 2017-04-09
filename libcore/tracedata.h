@@ -1137,6 +1137,8 @@ public:
     void invalidateDynamicCost();
 
     void addCaller(TraceCall*);
+    TraceCall* nonAggregationallyCalled(TraceFunction* caller);
+    TraceCallList& nonAggregatingCalls() { return _nonAggregatingCalls; }
 
     // factories
     TraceCall* calling(TraceFunction* called);
@@ -1242,6 +1244,7 @@ private:
 
     TraceFunction* _aggregator;
     TraceFunctionList _aggregatees;
+    TraceCallList _nonAggregatingCalls;
 };
 
 

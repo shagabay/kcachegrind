@@ -351,7 +351,7 @@ public:
     void sortEdges();
 
 private:
-    void buildGraph(TraceFunction*, int, bool, double);
+    void buildGraph(TraceFunction*, int, bool, double, TraceFunction*);
 
     QString _dotName;
     CostItem* _item;

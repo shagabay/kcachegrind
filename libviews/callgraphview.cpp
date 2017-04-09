@@ -628,13 +628,13 @@ void GraphExporter::createGraph()
         _realFuncLimit = incl * _go->funcLimit();
         _realCallLimit = _realFuncLimit * _go->callLimit();
 
-        buildGraph(f, 0, true, 1.0); // down to callees
+        buildGraph(f, 0, true, 1.0, NULL); // down to callees
 
         // set costs of function back to 0, as it will be added again
         GraphNode& n = _nodeMap[f];
         n.self = n.incl = 0.0;
 
-        buildGraph(f, 0, false, 1.0); // up to callers
+        buildGraph(f, 0, false, 1.0, NULL); // up to callers
     } else {
         TraceCall* c = (TraceCall*) _item;
 
@@ -655,9 +655,9 @@ void GraphExporter::createGraph()
         e.count = c->callCount();
 
         SubCost s = called->inclusive()->subCost(_eventType);
-        buildGraph(called, 0, true, e.cost / s); // down to callees
+        buildGraph(called, 0, true, e.cost / s, NULL); // down to callees
         s = caller->inclusive()->subCost(_eventType);
-        buildGraph(caller, 0, false, e.cost / s); // up to callers
+        buildGraph(caller, 0, false, e.cost / s, NULL); // up to callers
     }
 }
 
@@ -958,8 +958,7 @@ GraphEdge* GraphExporter::edge(TraceFunction* f1, TraceFunction* f2)
  * If on a further visit of the node/edge the limit is reached,
  * we use the whole node/edge cost and continue search.
  */
-void GraphExporter::buildGraph(TraceFunction* f, int depth, bool toCallees,
-                               double factor)
+void GraphExporter::buildGraph(TraceFunction* f, int depth, bool toCallees, double factor, TraceFunction* referenceCaller)
 {
 #if DEBUG_GRAPH
     qDebug() << "buildGraph(" << f->prettyName() << "," << d << "," << factor
@@ -973,9 +972,15 @@ void GraphExporter::buildGraph(TraceFunction* f, int depth, bool toCallees,
     } else
         oldIncl = n.incl;
 
-    double incl = f->inclusive()->subCost(_eventType) * factor;
+    double incl = (
+            referenceCaller ?
+                    referenceCaller->inclusive()->subCost(_eventType) :
+                    f->inclusive()->subCost(_eventType)) * factor;
     n.incl += incl;
-    n.self += f->subCost(_eventType) * factor;
+    n.self += (
+            referenceCaller ?
+                    referenceCaller->subCost(_eventType) :
+                    f->subCost(_eventType)) * factor;
     if (0)
         qDebug("  Added Incl. %f, now %f", incl, n.incl);
 
@@ -1018,13 +1023,31 @@ void GraphExporter::buildGraph(TraceFunction* f, int depth, bool toCallees,
     // on entering a cycle, only go the FunctionCycle
     TraceCallList l = toCallees ? f->callings(false) : f->callers(false);
 
+    if (!toCallees) {
+        l.append(f->nonAggregatingCalls());
+    }
+
     foreach(TraceCall* call, l) {
+        bool inNonAggregatingCall = f->nonAggregatingCalls().contains(call);
 
         f2 = toCallees ? call->called(false) : call->caller(false);
 
         double count = call->callCount() * factor;
         double cost = call->subCost(_eventType) * factor;
-
+        TraceFunction *newReferenceCaller = NULL;
+        if (inNonAggregatingCall) {
+            // relavant to --separate-callers only
+            if (referenceCaller == NULL)
+                referenceCaller = f; // we need a reference function for deducing cost upwards
+            QString ref_f_name = referenceCaller->name() + '\''
+                    + call->caller(false)->prettyName();
+            newReferenceCaller = _data->function(ref_f_name, referenceCaller->file(),
+                    referenceCaller->object(), false);
+            if (newReferenceCaller == NULL) {
+                continue;
+            }
+            cost = newReferenceCaller->inclusive()->subCost(_eventType) * factor;
+        }
         // ignore function calls with absolute cost < 3 per call
         // No: This would skip a lot of functions e.g. with L2 cache misses
         // if (count>0.0 && (cost/count < 3)) continue;
@@ -1093,7 +1116,10 @@ void GraphExporter::buildGraph(TraceFunction* f, int depth, bool toCallees,
         // Never recurse if s or v is 0 (can happen with bogus input)
         if ((v == 0) || (s== 0)) continue;
 
-        buildGraph(f2, depth+1, toCallees, factor * v / s);
+        if (newReferenceCaller)
+            buildGraph(f2, depth+1, toCallees, 1.0, newReferenceCaller);
+        else
+            buildGraph(f2, depth+1, toCallees, factor * v / s, NULL);
     }
 }
 
