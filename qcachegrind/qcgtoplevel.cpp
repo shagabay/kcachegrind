@@ -874,7 +874,7 @@ void QCGTopLevel::loadDelayed(QString file, bool addToRecentFiles)
     _loadFilesDelayed << file;
 
     _addToRecentFiles = addToRecentFiles;
-    QTimer::singleShot(0, this, &QCGTopLevel::loadFilesDelayed);
+    QTimer::singleShot(0, this, SLOT(loadFilesDelayed()));
 }
 
 void QCGTopLevel::loadDelayed(QStringList files, bool addToRecentFiles)
@@ -882,7 +882,7 @@ void QCGTopLevel::loadDelayed(QStringList files, bool addToRecentFiles)
     _loadFilesDelayed << files;
 
     _addToRecentFiles = addToRecentFiles;
-    QTimer::singleShot(0, this, &QCGTopLevel::loadFilesDelayed);
+    QTimer::singleShot(0, this, SLOT(loadFilesDelayed()));
 }
 
 void QCGTopLevel::loadFilesDelayed()
@@ -1779,7 +1779,7 @@ void QCGTopLevel::activePartsChangedSlot(const TracePartList& list)
 
 void QCGTopLevel::partsHideSelectedSlotDelayed()
 {
-    QTimer::singleShot( 0, this, &QCGTopLevel::partsHideSelectedSlot );
+    QTimer::singleShot( 0, this, SLOT(partsHideSelectedSlot()));
 }
 
 // this puts selected parts into hidden list,
@@ -1810,7 +1810,7 @@ void QCGTopLevel::partsHideSelectedSlot()
 
 void QCGTopLevel::partsUnhideAllSlotDelayed()
 {
-    QTimer::singleShot( 0, this, &QCGTopLevel::partsUnhideAllSlot );
+    QTimer::singleShot( 0, this, SLOT(partsUnhideAllSlot()));
 }
 
 // this unhides all hidden parts. Does NOT change selection
