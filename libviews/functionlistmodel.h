@@ -1,5 +1,6 @@
 /* This file is part of KCachegrind.
    Copyright (c) 2010-2016 Josef Weidendorfer <Josef.Weidendorfer@gmx.de>
+   Copyright (c) Mobileye Vision Technologies <Sharon.Gabay@mobileye.com>
 
    KCachegrind is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public
@@ -59,7 +60,7 @@ public:
     void setEventType(EventType*);
     void setMaxCount(int);
 
-    TraceFunction* function(const QModelIndex &index);
+    TraceFunction* function(const QModelIndex &index) const;
     // get index of an entry showing a function, optionally adding it if needed
     QModelIndex indexForFunction(TraceFunction *f, bool add = false);
 
@@ -77,6 +78,7 @@ public:
         EventType* _eventType;
     };
 
+    int getFunctionRow(TraceFunction* f) const;
 private:
     QString getName(TraceFunction *f) const;
     QPixmap getNamePixmap(TraceFunction  *f) const;
@@ -100,6 +102,7 @@ private:
 
     QList<TraceFunction*> _list;
     QList<TraceFunction*> _filteredList;
+    QList<TraceFunction*> _topLevelAggregatorsList;
     QList<TraceFunction*> _topList;
 
     // functions with max values at col.0/1/2 from candidate list:

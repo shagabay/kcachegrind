@@ -142,7 +142,8 @@ FunctionSelection::FunctionSelection( TopLevelBase* top,
     functionListModel->setMaxCount(GlobalConfig::maxListCount());
 
     functionList = new QTreeView(this);
-    functionList->setRootIsDecorated(false);
+    functionList->setIndentation(20);
+
     functionList->setAllColumnsShowFocus(true);
     functionList->setAutoScroll(false);
     functionList->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -210,6 +211,11 @@ FunctionSelection::FunctionSelection( TopLevelBase* top,
     groupList->hide();
 
     setWhatsThis(whatsThis());
+}
+
+FunctionSelection::~FunctionSelection()
+{
+	delete functionListModel;
 }
 
 QString FunctionSelection::whatsThis() const
@@ -890,6 +896,7 @@ void FunctionSelection::setCostColumnWidths()
         functionList->resizeColumnToContents(0);
     else
         functionList->header()->resizeSection(0, 0);
+    functionList->setTreePosition(3);
 }
 
 void FunctionSelection::functionHeaderClicked(int col)

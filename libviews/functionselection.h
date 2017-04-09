@@ -49,6 +49,7 @@ class FunctionSelection: public QWidget, public TraceItemView
 
 public:
     explicit FunctionSelection(TopLevelBase*, QWidget* parent = 0);
+    ~FunctionSelection();
 
     TraceCostItem* group() { return _group; }
     TraceCostItem* group(QString);

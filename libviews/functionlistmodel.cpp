@@ -1,5 +1,6 @@
 /* This file is part of KCachegrind.
    Copyright (c) 2010-2016 Josef Weidendorfer <Josef.Weidendorfer@gmx.de>
+   Copyright (c) Mobileye Vision Technologies <Sharon.Gabay@mobileye.com>
 
    KCachegrind is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public
@@ -43,20 +44,33 @@ FunctionListModel::~FunctionListModel()
 
 int FunctionListModel::columnCount(const QModelIndex& parent) const
 {
-    return (parent.isValid()) ? 0 : 5;
+    if (not parent.isValid()) {
+        return 5;
+    } else if (function(parent) == 0) {
+        return 0;
+    } else {
+        return 5;
+    }
 }
 
 int FunctionListModel::rowCount(const QModelIndex& parent ) const
 {
-    if (parent.isValid()) return 0;
+    if (not parent.isValid()) {
+        int rowCount = _topList.count();
+        // add one more row if functions are skipped
+        if (_topList.count() < _topLevelAggregatorsList.count()) rowCount++;
+        return rowCount;
+    }
 
-    int rowCount = _topList.count();
-    // add one more row if functions are skipped
-    if (_topList.count() < _filteredList.count()) rowCount++;
-    return rowCount;
+    TraceFunction *f = function(parent);
+    if (f == NULL) {
+        // rowCount of the "skipped" line
+        return 0;
+    }
+    return f->aggregatees().count();
 }
 
-TraceFunction* FunctionListModel::function(const QModelIndex& index)
+TraceFunction* FunctionListModel::function(const QModelIndex& index) const
 {
     if (!index.isValid()) return 0;
 
@@ -68,34 +82,42 @@ QVariant FunctionListModel::data(const QModelIndex &index, int role) const
     if (!index.isValid()) return QVariant();
 
     // the skipped items entry
-    if ( (_topList.count() < _filteredList.count()) &&
+    if ( (_topList.count() < _topLevelAggregatorsList.count()) &&
          (index.row() == _topList.count()) ) {
         if( (role != Qt::DisplayRole) || (index.column() != 3))
             return QVariant();
 
-        return tr("(%1 function(s) skipped)").arg(_filteredList.count() - _topList.count());
+        return tr("(%1 function(s) skipped)").arg(_topLevelAggregatorsList.count() - _topList.count());
     }
 
-    TraceFunction *f = (TraceFunction*) index.internalPointer();
+    TraceFunction *f = function(index);
     Q_ASSERT(f != 0);
     switch(role) {
     case Qt::TextAlignmentRole:
         return (index.column()<3) ? Qt::AlignRight : Qt::AlignLeft;
 
     case Qt::DecorationRole:
+        if (f->aggregator() &&
+            (f->aggregator()->aggregatees().length() == 1)) return "";
         switch (index.column()) {
         case 0:
             return getInclPixmap(f);
         case 1:
             return getSelfPixmap(f);
         case 3:
-            return getNamePixmap(f);
+            if (!GlobalConfig::separateCallers() || (f->aggregator() == NULL)) {
+                return getNamePixmap(f);
+            } else {
+                return 0;
+            }
         default:
             break;
         }
         break;
 
     case Qt::DisplayRole:
+        if (f->aggregator() &&
+            (f->aggregator()->aggregatees().length() == 1) && index.column() != 3) return "";
         switch (index.column()) {
         case 0:
             return getInclCost(f);
@@ -139,16 +161,26 @@ QModelIndex FunctionListModel::index(int row, int column,
 {
     if (!hasIndex(row, column, parent)) return QModelIndex();
 
-    //the skipped items entry
-    if ( (_topList.count() < _list.count()) && (row == _topList.count()) )
-        return createIndex(row, column);
-
-    return createIndex(row, column, (void*)_topList[row]);
+    TraceFunction* f = function(parent);
+    // toplevel
+    if (f == NULL) {
+        if (  (_topList.count() < _topLevelAggregatorsList.count()) && (row == _topList.count()) )
+            //the skipped items entry
+            return createIndex(row, column);
+        return createIndex(row, column, (void*)_topList[row]);
+    }
+    // not toplevel
+    TraceFunctionList list = f->aggregatees();
+    Q_ASSERT(row < list.count());
+    TraceFunction* child = list[row];
+    return createIndex(row, column, (void*)child);
 }
 
 QModelIndex FunctionListModel::indexForFunction(TraceFunction *f, bool add)
 {
     if (!f) return QModelIndex();
+
+    if (!GlobalConfig::separateCallers() || GlobalConfig::isCallChain(f->name())) return createIndex(getFunctionRow(f), 0, (void*)f);
 
     int row = _topList.indexOf(f);
     if (row<0) {
@@ -170,10 +202,17 @@ QModelIndex FunctionListModel::indexForFunction(TraceFunction *f, bool add)
     return createIndex(row, 0, (void*)f);
 }
 
-QModelIndex FunctionListModel::parent(const QModelIndex& /*index*/ ) const
+QModelIndex FunctionListModel::parent(const QModelIndex& index) const
 {
-    /* only toplevel items */
-    return QModelIndex();
+	TraceFunction* f = function(index);
+	if (f == NULL) {
+		return QModelIndex();
+	}
+	TraceFunction* parent = f->aggregator();
+	if (parent == 0) {
+		return QModelIndex();
+	}
+	return createIndex(getFunctionRow(parent), 0, (void*)parent);
 }
 
 void FunctionListModel::sort(int column, Qt::SortOrder order)
@@ -293,6 +332,7 @@ void FunctionListModel::computeFilteredList()
             if (_filter.indexIn(f->name()) == -1) continue;
 
         _filteredList.append(f);
+        if (GlobalConfig::isCallChain(f->name())) continue;
         if (!_max0 || lessThan0(_max0, f)) { _max0 = f; }
         if (!_max1 || lessThan1(_max1, f)) { _max1 = f; }
         if (!_max2 || lessThan2(_max2, f)) { _max2 = f; }
@@ -309,28 +349,41 @@ void FunctionListModel::computeTopList()
         return;
     }
 
-    FunctionLessThan lessThan(_sortColumn, _sortOrder, _eventType);
-    std::stable_sort(_filteredList.begin(), _filteredList.end(), lessThan);
-
+    _topLevelAggregatorsList.clear();
     foreach(TraceFunction* f, _filteredList) {
-        _topList.append(f);
-        if (_topList.count() >= _maxCount) break;
+        if ((!GlobalConfig::separateCallers()) || (!(GlobalConfig::isCallChain(f->name())))) {
+            _topLevelAggregatorsList.append(f);
+        }
     }
+
+    FunctionLessThan lessThan(_sortColumn, _sortOrder, _eventType);
 
     // append max entries
     QList<TraceFunction*> maxList;
-    if (_max0 && !_topList.contains(_max0)) maxList.append(_max0);
-    if (_max1 && !_topList.contains(_max1)) maxList.append(_max1);
-    if (_max2 && !_topList.contains(_max2)) maxList.append(_max2);
+    if (_max0 && !_topLevelAggregatorsList.contains(_max0)) maxList.append(_max0);
+    if (_max1 && !_topLevelAggregatorsList.contains(_max1)) maxList.append(_max1);
+    if (_max2 && !_topLevelAggregatorsList.contains(_max2)) maxList.append(_max2);
     std::stable_sort(maxList.begin(), maxList.end(), lessThan);
-    _topList.append(maxList);
+    _topLevelAggregatorsList.append(maxList);
+
+    std::stable_sort(_topLevelAggregatorsList.begin(), _topLevelAggregatorsList.end(), lessThan);
+
+    foreach(TraceFunction* f, _topLevelAggregatorsList) {
+        _topList.append(f);
+        if (_topList.count() >= _maxCount) break;
+    }
 
     endResetModel();
 }
 
 QString FunctionListModel::getName(TraceFunction *f) const
 {
-    return f->prettyName();
+    QString fullName = f->name();
+    if (GlobalConfig::separateCallers() && GlobalConfig::isCallChain(fullName))
+        // get only last part, which is the aggregators 'root'
+        return GlobalConfig::callChainSplit(fullName).last();
+    else
+        return f->prettyName();
 }
 
 QPixmap FunctionListModel::getNamePixmap(TraceFunction *f) const
@@ -470,4 +523,11 @@ bool FunctionListModel::FunctionLessThan::operator()(TraceFunction *left,
     return false;
 }
 
-
+int FunctionListModel::getFunctionRow(TraceFunction* f) const
+{
+    if (f->aggregator() == NULL) {
+        return _topList.indexOf(f);
+    } else {
+        return f->aggregator()->aggregatees().indexOf(f);
+    }
+}
