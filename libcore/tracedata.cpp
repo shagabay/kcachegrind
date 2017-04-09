@@ -1,5 +1,6 @@
 /* This file is part of KCachegrind.
    Copyright (c) 2002-2016 Josef Weidendorfer <Josef.Weidendorfer@gmx.de>
+   Copyright (c) Mobileye Vision Technologies <Sharon.Gabay@mobileye.com>
 
    KCachegrind is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public
@@ -1119,14 +1120,17 @@ TraceCall::TraceCall(TraceFunction* caller, TraceFunction* called)
 {
     _caller = caller;
     _called = called;
+    _isAggregator = false;
 }
 
 
 TraceCall::~TraceCall()
 {
     // we are the owner of all items generated in our factories
-    qDeleteAll(_deps);
-    qDeleteAll(_lineCalls);
+    if (!_isAggregator) {
+      qDeleteAll(_deps);
+      qDeleteAll(_lineCalls);
+    }
 }
 
 TracePartCall* TraceCall::partCall(TracePart* part,
@@ -1243,6 +1247,17 @@ TraceFunction* TraceCall::called(bool skipCycle) const
     }
 
     return _called;
+}
+
+void TraceCall::aggregates(TraceCall* call)
+{
+    _isAggregator = true;
+    foreach(TraceCallCost * dep, call->_deps)
+    {
+        if (!_deps.contains(dep)) {
+            _deps.append(dep);
+        }
+    }
 }
 
 QString TraceCall::callerName(bool skipCycle) const
@@ -1806,6 +1821,8 @@ TraceFunction::TraceFunction()
 
     _instrMap = 0;
     _instrMapFilled = false;
+    _aggregator = NULL;
+    _aggregatees.clear();
 }
 
 
@@ -1813,10 +1830,11 @@ TraceFunction::~TraceFunction()
 {
     qDeleteAll(_associations);
 
-    // we are the owner of items generated in our factories
-    qDeleteAll(_deps);
-    qDeleteAll(_callings);
-    qDeleteAll(_sourceFiles);
+    if (_aggregatees.size() == 0) {
+        qDeleteAll(_deps);
+        qDeleteAll(_callings);
+        qDeleteAll(_sourceFiles);
+    }
 
     delete _instrMap;
 }
@@ -2634,6 +2652,28 @@ TraceInstrMap* TraceFunction::instrMap()
 }
 
 
+void TraceFunction::aggregates(TraceFunction* f)
+{
+    f->aggregated(this);
+    if (!_aggregatees.contains(f)) {
+        _aggregatees.append(f);
+    }
+    foreach (TraceInclusiveCost* dep, f->_deps) {
+        if (!_deps.contains(dep)) {
+            _deps.append(dep);
+        }
+    }
+    foreach (TraceFunctionSource* source, f->_sourceFiles) {
+        if (!_sourceFiles.contains(source)) {
+            _sourceFiles.append(source);
+        }
+    }
+}
+
+void TraceFunction::aggregated(TraceFunction* f)
+{
+    _aggregator = f;
+}
 
 //---------------------------------------------------
 // TraceFunctionCycle
@@ -3163,11 +3203,63 @@ int TraceData::load(QStringList files)
     }
     if (partsLoaded == 0) return 0;
 
+    initAggregators();
+
     std::sort(_parts.begin(), _parts.end(), partLessThan);
     invalidateDynamicCost();
     updateFunctionCycles();
 
     return partsLoaded;
+}
+
+void TraceData::initAggregators()
+{
+    QString emptyString;
+
+    TraceFunctionList functions;
+    TraceFunctionMap::ConstIterator it = functionBeginIterator();
+    while (it != functionEndIterator()) {
+        functions.append((TraceFunction*) &(it.value()));
+        it++;
+    }
+
+    foreach(TraceFunction * aggregatedFunction, functions)
+    {
+        TraceFunction* aggregator = aggregatedFunction;
+        while (GlobalConfig::separateCallers()
+                && GlobalConfig::isCallChain(aggregator->name())) {
+            TraceFunction* previousAggregator = aggregator;
+            QString name = GlobalConfig::callChainRemoveLast(
+                    aggregator->name());
+            aggregator = function(name, aggregatedFunction->file(),
+                    aggregatedFunction->object());
+            if (!aggregator) {
+                qWarning(
+                        "Error while initializing aggregation, aggregator name %s, root function %s",
+                        qPrintable(name),
+                        qPrintable(aggregatedFunction->name()));
+                continue;
+            }
+            aggregator->aggregates(previousAggregator);
+        }
+        foreach(TraceCall * aggregatedCall, aggregatedFunction->callers())
+        {
+            TraceFunction* caller = aggregatedCall->caller();
+            TraceFunction* called = aggregatedFunction;
+            while (GlobalConfig::separateCallers()
+                    && (GlobalConfig::isCallChain(called->name()))
+                    && (GlobalConfig::isCallChain(caller->name()))) {
+                called = function(
+                        GlobalConfig::callChainRemoveLast(called->name()),
+                        called->file(), called->object());
+                caller = function(
+                        GlobalConfig::callChainRemoveLast(caller->name()),
+                        caller->file(), caller->object());
+                TraceCall* call = caller->calling(called);
+                call->aggregates(aggregatedCall);
+            }
+        }
+    }
 }
 
 int TraceData::load(QString file)
@@ -3410,7 +3502,7 @@ TraceClass* TraceData::cls(const QString& fnName, QString& shortName)
 
 // name is inclusive class/namespace prefix
 TraceFunction* TraceData::function(const QString& name,
-                                   TraceFile* file, TraceObject* object)
+                                   TraceFile* file, TraceObject* object, bool createIfNexists)
 {
     // strip class name
     QString shortName;
@@ -3448,6 +3540,7 @@ TraceFunction* TraceData::function(const QString& name,
     TraceFunctionMap::Iterator it;
     it = _functionMap.find(key);
     if (it == _functionMap.end()) {
+        if (!createIfNexists) return NULL;
         it = _functionMap.insert(key, TraceFunction());
         TraceFunction& f = it.value();
 

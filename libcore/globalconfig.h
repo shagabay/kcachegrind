@@ -64,6 +64,11 @@ public:
     // max. number of items in lists
     static int maxListCount();
 
+    // --separate-callrs: call chain processing
+    static bool isCallChain(const QString& s);
+    static QString callChainRemoveLast(const QString& s);
+    static QStringList callChainSplit(const QString& s);
+
     // how many lines of context to show before/after annotated source/assembler
     static int context();
     // how many lines without cost are still regarded as inside a function

@@ -418,6 +418,34 @@ QString GlobalConfig::shortenSymbol(const QString& s)
     return s;
 }
 
+bool GlobalConfig::isCallChain(const QString& s)
+{
+    return callChainSplit(s).length() > 1;
+}
+
+QString GlobalConfig::callChainRemoveLast(const QString& s)
+{
+	QStringList list = callChainSplit(s);
+	list.removeLast();
+	return list.join('\'');
+}
+
+QStringList GlobalConfig::callChainSplit(const QString& s)
+{
+	QStringList RES_ERROR;
+	QStringList res;
+	QStringList list = s.split('\'');
+	foreach(QString part, list) {
+		if (part == "") return RES_ERROR;
+        bool ok;
+        part.toInt(&ok);
+        if (ok && res.empty()) return RES_ERROR;
+        else if (ok) res.last().append('\'' + part);
+        else res.append(part);
+	}
+	return res;
+}
+
 int GlobalConfig::maxListCount()
 {
     return config()->_maxListCount;

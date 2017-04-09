@@ -1,5 +1,6 @@
 /* This file is part of KCachegrind.
    Copyright (c) 2002-2016 Josef Weidendorfer <Josef.Weidendorfer@gmx.de>
+   Copyright (c) Mobileye Vision Technologies <Sharon.Gabay@mobileye.com>
 
    KCachegrind is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public
@@ -865,6 +866,7 @@ public:
     FixCallCost* setFirstFixCost(FixCallCost* fc)
     { FixCallCost* t = _firstFixCost; _firstFixCost = fc; return t; }
 
+    void aggregates(TraceCall* aggregatee);
 protected:
     bool onlyActiveParts() { return true; }
 
@@ -875,6 +877,8 @@ private:
     TraceFunction* _called;
 
     FixCallCost* _firstFixCost;
+
+    bool _isAggregator;
 };
 
 
@@ -1202,6 +1206,11 @@ public:
     void cycleReset();
     void cycleDFS(int d, int& pNo, TraceFunction** pTop);
 
+    void aggregates(TraceFunction* f);
+    void aggregated(TraceFunction* f);
+    TraceFunction* aggregator() const {return _aggregator;}
+    TraceFunctionList aggregatees() const {return _aggregatees;}
+
 protected:
     TraceCallList _callers; // list of calls we are called from
     TraceCallList _callings; // list of calls we are calling (we are owner)
@@ -1229,6 +1238,9 @@ private:
     // cached
     SubCost _calledCount, _callingCount;
     int _calledContexts, _callingContexts;
+
+    TraceFunction* _aggregator;
+    TraceFunctionList _aggregatees;
 };
 
 
@@ -1382,6 +1394,8 @@ public:
     int load(QString file);
     int load(QIODevice*, const QString&);
 
+    void initAggregators();
+
     /** returns true if something changed. These do NOT
      * invalidate the dynamic costs on a activation change,
      * i.e. all cost items depends on active parts.
@@ -1417,7 +1431,7 @@ public:
     TraceFile* file(const QString& name);
     TraceClass* cls(const QString& fnName, QString& shortName);
     // function creation involves class creation if needed
-    TraceFunction* function(const QString& name, TraceFile*, TraceObject*);
+    TraceFunction* function(const QString& name, TraceFile*, TraceObject*, bool = true);
     // factory for function cycles
     TraceFunctionCycle* functionCycle(TraceFunction*);
 
