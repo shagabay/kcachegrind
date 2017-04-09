@@ -1291,7 +1291,7 @@ QString TraceCall::calledName(bool skipCycle) const
             return QObject::tr("%1 via %2").arg(c->name()).arg(via);
         }
     }
-    return _called->prettyName();
+    return _called->prettyNameTopLevel();
 }
 
 
@@ -1957,6 +1957,16 @@ QString TraceFunction::prettyName() const
             res = QStringLiteral("<cycle %2>").arg(_cycle->cycleNo());
     }
 
+    return res;
+}
+
+QString TraceFunction::prettyNameTopLevel() const
+{
+    QString res = prettyName();
+
+    if (GlobalConfig::isCallChain(res)) {
+        return GlobalConfig::callChainSplit(res).first();
+    }
 
     return res;
 }
@@ -3122,6 +3132,8 @@ void TraceData::init()
     _dynPool = 0;
 
     _arch = ArchUnknown;
+
+    _traceDataCachedType = NULL;
 }
 
 TraceData::~TraceData()
@@ -3499,6 +3511,29 @@ TraceClass* TraceData::cls(const QString& fnName, QString& shortName)
     return &c;
 }
 
+SubCost TraceData::subCost(EventType* t)
+{
+    if (!GlobalConfig::separateCallers()) return ((ProfileCostArray*)this)->subCost(t);
+    // because of added aggregators, subCost has to be calculated in a different way for TraceData
+    if (!t) return 0;
+    if (_traceDataCachedType != t) {
+        _traceDataCachedType = t;
+        _traceDataCachedCost = 0;
+        TraceFunctionMap::iterator i = _functionMap.begin();
+        while (i != _functionMap.end()) {
+            if (!GlobalConfig::isCallChain(i.value().name())) {
+                _traceDataCachedCost += i.value().subCost(t);
+            }
+            i++;
+        }
+    }
+    return _traceDataCachedCost;
+}
+
+QString TraceData::prettySubCost(EventType* t)
+{
+    return subCost(t).pretty();
+}
 
 // name is inclusive class/namespace prefix
 TraceFunction* TraceData::function(const QString& name,
@@ -3616,6 +3651,8 @@ void TraceData::update()
         if (part->isActive())
             addCost(part->totals());
     }
+
+    _traceDataCachedType = NULL;
 
     _dirty = false;
 }

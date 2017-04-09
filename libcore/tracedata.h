@@ -1154,6 +1154,7 @@ public:
     QString location(int maxFiles = 0) const;
 
     QString prettyName() const;
+    QString prettyNameTopLevel() const;
     QString formattedName() const;
     static QString prettyEmptyName();
     QString prettyLocation(int maxFiles = 0) const;
@@ -1487,6 +1488,9 @@ public:
     void updateFileCycles();
     bool inFunctionCycleUpdate() { return _inFunctionCycleUpdate; }
 
+    SubCost subCost(EventType* t);
+    QString prettySubCost(EventType* t);
+
 private:
     void init();
     // add profile parts from one file
@@ -1525,6 +1529,9 @@ private:
     TraceFunctionCycleList _functionCycles;
     int _functionCycleCount;
     bool _inFunctionCycleUpdate;
+
+    EventType* _traceDataCachedType;
+    SubCost _traceDataCachedCost;
 };
 
 
