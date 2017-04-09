@@ -173,7 +173,11 @@ ConfigColorSetting* GlobalGUIConfig::groupColorSetting(CostItem* cost)
     if (!cost)
         return colorSetting(QStringLiteral("default"));
 
-    return groupColorSetting(cost->type(), cost->name());
+    QString name = cost->name();
+    if (GlobalConfig::isCallChain(name)) {
+        name = GlobalConfig::callChainSplit(name).first();
+    }
+    return groupColorSetting(cost->type(), name);
 }
 
 ConfigColorSetting* GlobalGUIConfig::groupColorSetting(ProfileContext::Type t,

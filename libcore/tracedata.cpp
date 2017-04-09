@@ -2040,21 +2040,25 @@ QString TraceFunction::location(int maxFiles) const
     }
 
     // add all source files
-    int filesAdded = 0;
+    QVector<QString> filesAdded;
     foreach(TraceFunctionSource* sourceFile, _sourceFiles) {
         if (!sourceFile->file() ||
             (sourceFile->file()->name().isEmpty()) )
             continue;
 
-        if (!loc.isEmpty())
-            loc += (filesAdded>0) ? ", " : ": ";
-        filesAdded++;
+        QString fileName = sourceFile->file()->shortName();
 
-        if ((maxFiles>0) && (filesAdded>maxFiles)) {
+        if (filesAdded.contains(fileName)) continue;
+
+        if (!loc.isEmpty())
+            loc += (filesAdded.size()>0) ? ", " : ": ";
+        filesAdded.append(fileName);
+
+        if ((maxFiles>0) && (filesAdded.size()>maxFiles)) {
             loc += QLatin1String("...");
             break;
         }
-        loc += sourceFile->file()->shortName();
+        loc += fileName;
 
 #if 0
         from = sourceFile->firstLineno();
