@@ -40,6 +40,7 @@
 #define DEFAULT_MAXLISTCOUNT     100
 #define DEFAULT_CONTEXT          3
 #define DEFAULT_NOCOSTINSIDE     20
+#define DEFAULT_SEPARATECALLERS  false
 
 
 //
@@ -136,6 +137,8 @@ GlobalConfig::GlobalConfig()
     // annotation behaviour
     _context          = DEFAULT_CONTEXT;
     _noCostInside     = DEFAULT_NOCOSTINSIDE;
+
+    _separateCallers = DEFAULT_SEPARATECALLERS;
 }
 
 GlobalConfig::~GlobalConfig()
@@ -302,6 +305,16 @@ void GlobalConfig::addDefaultTypes()
         ct = new EventType(*it, longName, formula);
         EventType::add(ct, false);
     }
+}
+
+void GlobalConfig::setSeparateCallers(bool value)
+{
+	config()->_separateCallers = value;
+}
+
+bool GlobalConfig::separateCallers()
+{
+	return config()->_separateCallers;
 }
 
 /* Gives back a list of all Source Base Directories of Objects in

@@ -92,6 +92,9 @@ public:
 
     void addDefaultTypes();
 
+    static void setSeparateCallers(bool);
+    static bool separateCallers();
+
 protected:
     QStringList knownTypes();
     QString knownFormula(const QString& name);
@@ -105,6 +108,8 @@ protected:
     int _percentPrecision;
     int _maxSymbolLength, _maxSymbolCount, _maxListCount;
     int _context, _noCostInside;
+
+    bool _separateCallers;
 
     static GlobalConfig* _config;
 };

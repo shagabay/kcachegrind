@@ -54,7 +54,7 @@ class QCGTopLevel : public QMainWindow, public Logger, public TopLevelBase
     Q_CLASSINFO("D-Bus Interface", "io.github.qcachegrind")
 
 public:
-    QCGTopLevel();
+    QCGTopLevel(bool);
     ~QCGTopLevel();
 
     TraceData* data() { return _data; }

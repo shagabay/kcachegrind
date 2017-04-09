@@ -58,7 +58,7 @@
 #include "callgraphview.h"
 #include "configdialog.h"
 
-QCGTopLevel::QCGTopLevel()
+QCGTopLevel::QCGTopLevel(bool separateCallersFlagPresent)
 {
 #ifdef QT_DBUS_SUPPORT
     QDBusConnection con = QDBusConnection::sessionBus();
@@ -77,6 +77,8 @@ QCGTopLevel::QCGTopLevel()
     resetState();
 
     GlobalGUIConfig::config()->readOptions();
+    if (separateCallersFlagPresent)
+      GlobalGUIConfig::setSeparateCallers(true);
 
     createActions();
     createDocks();
@@ -784,7 +786,7 @@ void QCGTopLevel::functionVisibilityChanged(bool v)
 
 void QCGTopLevel::newWindow()
 {
-    QCGTopLevel* t = new QCGTopLevel();
+    QCGTopLevel* t = new QCGTopLevel(GlobalConfig::separateCallers());
     t->show();
 }
 
@@ -807,7 +809,7 @@ void QCGTopLevel::load(QStringList files, bool addToRecentFiles)
     if (_data && _data->parts().count()>0) {
 
         // In new window
-        QCGTopLevel* t = new QCGTopLevel();
+        QCGTopLevel* t = new QCGTopLevel(GlobalConfig::separateCallers());
         t->show();
         t->loadDelayed(files, addToRecentFiles);
         return;

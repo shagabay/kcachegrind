@@ -30,9 +30,26 @@
 #include "tracedata.h"
 #include "loader.h"
 
+#define SEPARATE_CALLERS_OPTION "--separate-callers"
+
+bool isSeparateCallersFlagPresent(QStringList optionList)
+{
+    foreach(const QString& option, optionList) {
+        if (option == SEPARATE_CALLERS_OPTION) {
+            return true;
+            break;
+        }
+    }
+    return false;
+}
+
 int main( int argc, char ** argv )
 {
     QApplication app(argc, argv);
+
+    QStringList list = app.arguments();
+    list.pop_front();
+
     Loader::initLoaders();
 
     QCoreApplication::setOrganizationName(QStringLiteral("kcachegrind.github.io"));
@@ -41,17 +58,16 @@ int main( int argc, char ** argv )
     // creates global config object of type GlobalGUIConfig
     //GlobalGUIConfig::config()->addDefaultTypes();
 
-    QStringList list = app.arguments();
-    list.pop_front();
-    QCGTopLevel* t = new QCGTopLevel();
+    QCGTopLevel* t = new QCGTopLevel(isSeparateCallersFlagPresent(list));
     t->show();
     if (list.isEmpty()) {
         // load files in current dir
         t->loadDelayed( QStringLiteral("."), false);
     }
     else {
-        foreach(const QString& file, list)
-            t->loadDelayed( QDir::fromNativeSeparators(file) );
+        foreach(const QString& option, list)
+            if (option != SEPARATE_CALLERS_OPTION)
+                t->loadDelayed( QDir::fromNativeSeparators(option) );
     }
 
     int res = app.exec();
