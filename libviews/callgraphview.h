@@ -1,5 +1,6 @@
 /* This file is part of KCachegrind.
    Copyright (c) 2003-2016 Josef Weidendorfer <Josef.Weidendorfer@gmx.de>
+   Copyright (c) Mobileye Vision Technologies <Sharon.Gabay@mobileye.com>
 
    KCachegrind is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public
@@ -284,7 +285,7 @@ public:
 protected:
     double _funcLimit, _callLimit;
     int _maxCallerDepth, _maxCalleeDepth;
-    bool _showSkipped, _expandCycles, _clusterGroups;
+    bool _alwaysStayContextless, _showSkipped, _expandCycles, _clusterGroups;
     int _detailLevel;
     Layout _layout;
 };
@@ -368,6 +369,8 @@ private:
     // graph parts written to file
     GraphNodeMap _nodeMap;
     GraphEdgeMap _edgeMap;
+
+    TraceData* _data;
 };
 
 

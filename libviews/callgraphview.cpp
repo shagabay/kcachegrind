@@ -1,5 +1,6 @@
 /* This file is part of KCachegrind.
    Copyright (c) 2007-2016 Josef Weidendorfer <Josef.Weidendorfer@gmx.de>
+   Copyright (c) Mobileye Vision Technologies <Sharon.Gabay@mobileye.com>
 
    KCachegrind is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public
@@ -62,6 +63,7 @@
 #define DEFAULT_CALLLIMIT     1.
 #define DEFAULT_MAXCALLER     2
 #define DEFAULT_MAXCALLEE     -1
+#define DEFAULT_ALWAYS_STAY_CONTEXTLESS false
 #define DEFAULT_SHOWSKIPPED   false
 #define DEFAULT_EXPANDCYCLES  false
 #define DEFAULT_CLUSTERGROUPS false
@@ -556,9 +558,11 @@ GraphExporter::~GraphExporter()
 }
 
 
-void GraphExporter::reset(TraceData*, CostItem* i, EventType* ct,
+void GraphExporter::reset(TraceData* d, CostItem* i, EventType* ct,
                           ProfileContext::Type gt, QString filename)
 {
+	_data = d;
+
     _graphCreated = false;
     _nodeMap.clear();
     _edgeMap.clear();
@@ -1180,7 +1184,7 @@ CanvasNode::CanvasNode(CallGraphView* v, GraphNode* n, int x, int y, int w,
         return;
 
     if (_node->function())
-        setText(0, _node->function()->prettyName());
+        setText(0, _node->function()->prettyNameTopLevel());
 
     ProfileCostArray* totalCost;
     if (GlobalConfig::showExpanded()) {
@@ -1542,6 +1546,8 @@ CallGraphView::CallGraphView(TraceItemView* parentView, QWidget* parent,
     _prevSelectedNode = 0;
     connect(&_renderTimer, &QTimer::timeout,
             this, &CallGraphView::showRenderWarning);
+
+    _alwaysStayContextless = DEFAULT_ALWAYS_STAY_CONTEXTLESS;
 }
 
 CallGraphView::~CallGraphView()
@@ -2676,7 +2682,13 @@ void CallGraphView::mouseDoubleClickEvent(QMouseEvent* e)
             qDebug("CallGraphView: Double Clicked on Node '%s'",
                    qPrintable(n->function()->prettyName()));
 
-        activated(n->function());
+        TraceFunction* f = n->function();
+        if (_alwaysStayContextless) {
+            while (f->aggregator() != NULL) {
+                f = f->aggregator();
+            }
+        }
+        activated(_data->function(f->prettyName(), f->file(), f->object()));
     }
 
     // redirect from label / arrow to edge
@@ -2941,6 +2953,7 @@ void CallGraphView::contextMenuEvent(QContextMenuEvent* e)
     TraceCall* c = 0;
 
     QAction* activateFunction = 0;
+    QAction* activateFunctionTopLevel = 0;
     QAction* activateCycle = 0;
     QAction* activateCall = 0;
     if (i) {
@@ -2954,10 +2967,25 @@ void CallGraphView::contextMenuEvent(QContextMenuEvent* e)
             cycle = f->cycle();
 
             QString name = f->prettyName();
-            QString menuStr = tr("Go to '%1'")
-                              .arg(GlobalConfig::shortenSymbol(name));
-            activateFunction = popup.addAction(menuStr);
-            if (cycle && (cycle != f)) {
+            QString nameTopLevel = f->prettyNameTopLevel();
+            QString menuStr;
+            if (name != nameTopLevel) {
+                menuStr = tr("Go to '%1'").arg(GlobalConfig::shortenSymbol(nameTopLevel));
+                activateFunction = popup.addAction(menuStr);
+                if (GlobalConfig::separateCallers()) {
+                    menuStr = tr("Go to contextless '%1'").arg(GlobalConfig::shortenSymbol(nameTopLevel));
+				    activateFunctionTopLevel = popup.addAction(menuStr);
+			    }
+            } else {
+                menuStr = tr("Go to contextless '%1'").arg(GlobalConfig::shortenSymbol(name));
+                activateFunction = popup.addAction(menuStr);
+            }
+            QAction* toBold = (_alwaysStayContextless && activateFunctionTopLevel) ? activateFunctionTopLevel : activateFunction;
+			QFont font = toBold->font();
+			font.setWeight(QFont::Bold);
+			toBold->setFont(font);
+
+			if (cycle && (cycle != f)) {
                 name = GlobalConfig::shortenSymbol(cycle->prettyName());
                 activateCycle = popup.addAction(tr("Go to '%1'").arg(name));
             }
@@ -3009,6 +3037,11 @@ void CallGraphView::contextMenuEvent(QContextMenuEvent* e)
     addCallLimitMenu(gpopup);
     gpopup->addSeparator();
 
+    QAction* toggleAlwaysStayContextless;
+    toggleAlwaysStayContextless = gpopup->addAction(tr("Always stay contextless"));
+    toggleAlwaysStayContextless->setCheckable(true);
+    toggleAlwaysStayContextless->setChecked(_alwaysStayContextless);
+
     QAction* toggleSkipped;
     toggleSkipped = gpopup->addAction(tr("Arrows for Skipped Calls"));
     toggleSkipped->setCheckable(true);
@@ -3041,7 +3074,15 @@ void CallGraphView::contextMenuEvent(QContextMenuEvent* e)
     QAction* a = popup.exec(e->globalPos());
 
     if (a == activateFunction)
+    {
         activated(f);
+    }
+    else if (a == activateFunctionTopLevel) {
+        while (f->aggregator() != NULL) {
+            f = f->aggregator();
+        }
+        activated(f);
+    }
     else if (a == activateCycle)
         activated(cycle);
     else if (a == activateCall)
@@ -3085,6 +3126,10 @@ void CallGraphView::contextMenuEvent(QContextMenuEvent* e)
         }
     }
 
+    else if (a == toggleAlwaysStayContextless) {
+        _alwaysStayContextless = !_alwaysStayContextless;
+        refresh();
+    }
     else if (a == toggleSkipped) {
         _showSkipped = !_showSkipped;
         refresh();
