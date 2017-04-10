@@ -2464,6 +2464,9 @@ void TraceFunction::cycleReset()
 // this does not mark functions calling themself !
 void TraceFunction::cycleDFS(int d, int& pNo, TraceFunction** pTop)
 {
+    // --separata-callers: do not investigate cycles on aggregators (produces fake cycles)
+    if (_aggregatees.size() > 0) return;
+
     if (_cycleLow != 0) return;
 
     // initialize with prefix order
@@ -3275,22 +3278,25 @@ void TraceData::initAggregators()
         {
             TraceFunction* caller = aggregatedCall->caller();
             TraceFunction* called = aggregatedFunction;
-            while (GlobalConfig::separateCallers()
-                    && (GlobalConfig::isCallChain(called->name()))) {
-                called = function(
-                        GlobalConfig::callChainRemoveLast(called->name()),
-                        called->file(), called->object());
-                if (GlobalConfig::isCallChain(caller->name())) {
-                    caller = function(
-                            GlobalConfig::callChainRemoveLast(caller->name()),
-                            caller->file(), caller->object());
-                    TraceCall* call = caller->calling(called);
-                    call->aggregates(aggregatedCall);
-                } else {
-                    TraceCall* call = called->nonAggregationallyCalled(caller);
-                    call->aggregates(aggregatedCall);
+            if (GlobalConfig::separateCallers())
+                while (true) {
+                    if (GlobalConfig::isCallChain(caller->name())) {
+                        caller = function(
+                                GlobalConfig::callChainRemoveLast(caller->name()),
+                                caller->file(), caller->object());
+                    }
+                    if (GlobalConfig::isCallChain(called->name())) {
+                        called = function(
+                                GlobalConfig::callChainRemoveLast(called->name()),
+                                called->file(), called->object());
+                        TraceCall* call = caller->calling(called);
+                        call->aggregates(aggregatedCall);
+                    } else {
+                        TraceCall* call = called->nonAggregationallyCalled(caller);
+                        call->aggregates(aggregatedCall);
+                        break;
+                    }
                 }
-            }
         }
     }
 }

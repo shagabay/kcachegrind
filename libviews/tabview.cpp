@@ -764,8 +764,8 @@ void TabView::doUpdate(int changeType, bool force)
                     imgText = " <img src=\":/child.png\">";
                     QString name_with_ln = _activeItem->name();
                     name_with_ln = name_with_ln.right(name_with_ln.length() - name_with_ln.indexOf('\'') - 1);
-                    name_with_ln.replace("'","\n::");
-                    imgTooltip = "This function is displayed within a specific context:\n::" +
+                    name_with_ln.replace("'","\n");
+                    imgTooltip = "This function is displayed within a specific context:\n" +
                                  name_with_ln + "\nClick on this label for the contextless version of this function.";
                 }
                 updateNameLabel(((TraceFunction*)_activeItem)->prettyNameTopLevel() + imgText);
